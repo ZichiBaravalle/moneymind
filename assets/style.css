@@ -1,0 +1,52 @@
+body {
+  margin: 0;
+  font-family: Inter var, ui-sans-serif, system-ui, sans-serif,
+    Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+}
+small {
+  color: red;
+}
+#__nuxt {
+  height: 100%;
+  width: 100%;
+}
+.cardPrincipale {
+  width: calc(100% - 10px);
+  height: calc(100% - 40px);
+  margin: 10px;
+  float: left;
+}
+.p-menu-item-content {
+  width: 100%;
+}
+.grid-custom {
+  display: grid;
+  grid-gap: 20px;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+}
+.p-datatable-paginator-bottom {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+}
+.border-red {
+  margin: red 1px solid !important;
+}
+::-webkit-scrollbar-thumb {
+  background-color: #a855f7;
+  border-radius: 20px;
+  border: 6px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar {
+  width: 16px;
+}
+.float-right {
+  float: right !important;
+}
+.float-left {
+  float: left !important;
+}
+.iub__us-widget {
+  display: none !important;
+}
