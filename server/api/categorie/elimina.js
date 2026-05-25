@@ -19,43 +19,32 @@ export default defineEventHandler(async (event) => {
   }
 
   if (entrate !== null && categorie?.length > 0) {
-    for (const categoria of categorie) {
-      if (exist(categoria.nomeNuovo)) {
-        await entrateModel.update(
-          {
-            categoria: categoria.nomeNuovo,
-          },
-          {
-            where: {
-              categoria: categoria.nome,
-              utente: utente,
-            },
-          }
-        );
-      } else {
-        await entrateModel.destroy({
-          where: {
-            categoria: categoria.nome,
-            utente: utente,
-          },
-          force: true,
-        });
+    try {
+      for (const categoria of categorie) {
+        if (exist(categoria.nomeNuovo)) {
+          await entrateModel.update(
+            { categoria: categoria.nomeNuovo },
+            { where: { categoria: categoria.nome, utente: utente } }
+          );
+        } else {
+          await entrateModel.destroy({
+            where: { categoria: categoria.nome, utente: utente },
+            force: true,
+          });
+        }
       }
-    }
 
-    await categorieModel.destroy({
-      where: {
-        [Op.or]: categorie.map((x) => {
-          return { nome: x.nome };
-        }),
-        utente: utente,
-      },
-      force: true,
-    });
-  } else
-    return createError({
-      statusCode: 400,
-      statusMessage: "Problemi con body",
-    });
-  return "Hello Nitro";
+      await categorieModel.destroy({
+        where: {
+          [Op.or]: categorie.map((x) => ({ nome: x.nome })),
+          utente: utente,
+        },
+        force: true,
+      });
+      return "OK";
+    } catch (error) {
+      console.error("Errore DB categorie/elimina:", error);
+      throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+    }
+  } else return createError({ statusCode: 400, statusMessage: "Problemi con body" });
 });

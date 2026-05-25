@@ -13,9 +13,11 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  await entrateFisseModel.destroy({
-    where: { id: id },
-    force: true,
-  });
-  return "OK";
+  try {
+    await entrateFisseModel.destroy({ where: { id: id }, force: true });
+    return "OK";
+  } catch (error) {
+    console.error("Errore DB entrateFisse/elimina:", error);
+    throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+  }
 });

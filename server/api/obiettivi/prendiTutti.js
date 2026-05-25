@@ -15,29 +15,26 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const categorie = await prendiCategorie("obiettivi", utente);
+  try {
+    const categorie = await prendiCategorie("obiettivi", utente);
+    const entrate = await prendiEntrate(categorie, utente, "obiettivi");
 
-  const entrate = await prendiEntrate(categorie, utente, "obiettivi");
-
-  const obiettivi = await obiettiviModel.findAll({
-    attributes: [
-      "id",
-      "nome",
-      "soldiAttuali",
-      "obiettivoSoldi",
-      "createdAt",
-      "contoCollegato",
-    ],
-    where: {  utente: utente },
-  });
-  for (const obiettivo of obiettivi) {
-    obiettivo.dataValues.soldiEntrate = 0;
-    entrate
-      .filter((x) => x.obiettivi === obiettivo.dataValues.nome)
-      .forEach((x) => {
-        obiettivo.dataValues.soldiAttuali += x.soldi;
-        obiettivo.dataValues.soldiEntrate += x.soldi;
-      });
+    const obiettivi = await obiettiviModel.findAll({
+      attributes: ["id", "nome", "soldiAttuali", "obiettivoSoldi", "createdAt", "contoCollegato"],
+      where: { utente: utente },
+    });
+    for (const obiettivo of obiettivi) {
+      obiettivo.dataValues.soldiEntrate = 0;
+      entrate
+        .filter((x) => x.obiettivi === obiettivo.dataValues.nome)
+        .forEach((x) => {
+          obiettivo.dataValues.soldiAttuali += x.soldi;
+          obiettivo.dataValues.soldiEntrate += x.soldi;
+        });
+    }
+    return obiettivi;
+  } catch (error) {
+    console.error("Errore DB obiettivi/prendiTutti:", error);
+    throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
   }
-  return obiettivi;
 });

@@ -25,7 +25,31 @@
           <Divider />
         </template>
         <template #content>
+          <!-- Loading state -->
+          <div v-if="loading" class="flex flex-wrap gap-4">
+            <div v-for="i in 3" :key="i" class="w-full lg:w-18rem">
+              <Skeleton height="2rem" class="mb-3 w-8rem mx-auto" />
+              <Skeleton height="1rem" class="mb-2" />
+              <Skeleton height="1rem" class="mb-2" />
+              <Skeleton height="3rem" class="mt-3" />
+            </div>
+          </div>
+
+          <!-- Error state -->
+          <div
+            v-else-if="errore"
+            class="flex flex-column align-items-center justify-content-center gap-3 p-6"
+            style="min-height: 20rem">
+            <i class="fa-solid fa-circle-exclamation text-5xl" style="color: var(--p-amber-500)"></i>
+            <p class="text-xl text-center m-0">{{ errore.messaggio }}</p>
+            <Button @click="caricaDati()" severity="secondary">
+              <i class="fa-solid fa-rotate-right mr-2"></i>
+              Riprova
+            </Button>
+          </div>
+
           <DataView
+            v-else
             :value="conti"
             :pt="
               isMobile
@@ -34,7 +58,14 @@
             "
             layout="grid">
             <template #empty>
-              <h3 class="text-center">Non ci sono elementi disponibili</h3>
+              <div class="flex flex-column align-items-center p-6 gap-3">
+                <i class="fa-solid fa-piggy-bank text-4xl" style="color: var(--p-text-muted-color)"></i>
+                <p class="text-xl m-0" style="color: var(--p-text-muted-color)">Nessun conto creato</p>
+                <p class="text-sm m-0" style="color: var(--p-text-muted-color)">Aggiungi il tuo primo conto per iniziare</p>
+                <Button @click="visualizzaCrea = true; visualizzaModifica = false; erroreEsisteGia = false; erroreModifica = false;">
+                  <i class="fa-solid fa-plus mr-2"></i>Aggiungi conto
+                </Button>
+              </div>
             </template>
             <template #grid="slotProps">
               <Card
@@ -51,14 +82,12 @@
                   <span class="text-4xl">{{ item.nome }}</span>
                 </template>
                 <template #content>
-                  <span class="mb-3">Saldo complessivo: {{ item.soldi }}€</span>
+                  <span class="mb-3">Saldo complessivo: {{ formatEuro(item.soldi) }}</span>
                   <span>
                     Saldo effettivo disponibile:
                     {{
-                      item.soldiSenzaObiettivi
-                        ? item.soldiSenzaObiettivi
-                        : item.soldi
-                    }}€
+                      formatEuro(item.soldiSenzaObiettivi ? item.soldiSenzaObiettivi : item.soldi)
+                    }}
                   </span>
                 </template>
                 <template #footer>
@@ -193,7 +222,9 @@
 useHead({
   title: "Money Mind | Conti",
 });
-let conti = ref();
+const loading = ref(false);
+const errore = ref(null);
+let conti = ref([]);
 let submit = ref(false);
 let erroreModifica = ref(false);
 let erroreEsisteGia = ref(false);
@@ -216,17 +247,27 @@ const nomeUtente = ref(
 );
 const { isMobile } = useDevice();
 
-onMounted(async () => {
+const caricaDati = async () => {
+  loading.value = true;
+  errore.value = null;
   try {
-    conti.value = await $fetch("/api/conti/prendiTutti", {
-      method: "POST",
-      body: true,
-    });
-    console.log(conti.value);
-  } catch (error) {}
+    conti.value = await $fetch("/api/conti/prendiTutti", { method: "POST", body: true });
+    conti.value = conti.value ?? [];
+  } catch (err) {
+    if (import.meta.dev) console.error("Errore caricamento conti:", err);
+    if (err?.statusCode === 401 || err?.statusCode === 403)
+      errore.value = { tipo: "permessi", messaggio: "Non hai i permessi per accedere a questi dati." };
+    else
+      errore.value = { tipo: "server", messaggio: "Errore durante il caricamento. Riprova." };
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(async () => {
+  await caricaDati();
   if (isMobile)
-    document.querySelector("body").style.backgroundColor =
-      "var(--p-card-background)";
+    document.querySelector("body").style.backgroundColor = "var(--p-card-background)";
 });
 
 const creaConto = async () => {
@@ -241,21 +282,15 @@ const creaConto = async () => {
   ) {
     visualizzaCrea.value = false;
     bottonePremuto.value = false;
-    await $fetch("/api/conti/crea", {
-      method: "POST",
-      body: datiConto.value,
-    });
-    cancellaDati();
-    toast.add({
-      severity: "success",
-      summary: "Conferma",
-      detail: "Creazione effettuata con successo",
-      life: 3000,
-    });
-    conti.value = await $fetch("/api/conti/prendiTutti", {
-      method: "POST",
-      body: true,
-    });
+    try {
+      await $fetch("/api/conti/crea", { method: "POST", body: datiConto.value });
+      cancellaDati();
+      toast.add({ severity: "success", summary: "Conferma", detail: "Creazione effettuata con successo", life: 3000 });
+      conti.value = await $fetch("/api/conti/prendiTutti", { method: "POST", body: true });
+    } catch (err) {
+      if (import.meta.dev) console.error("Errore creazione conto:", err);
+      toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile creare il conto. Riprova.", life: 4000 });
+    }
   }
   bottonePremuto.value = false;
 };
@@ -279,21 +314,15 @@ const modificaConto = async () => {
     visualizzaCrea.value = false;
     bottonePremuto.value = false;
     visualizzaModifica.value = false;
-    await $fetch("/api/conti/modifica", {
-      method: "POST",
-      body: datiConto.value,
-    });
-    cancellaDati();
-    toast.add({
-      severity: "success",
-      summary: "Conferma",
-      detail: "Modifica effettuata con successo",
-      life: 3000,
-    });
-    conti.value = await $fetch("/api/conti/prendiTutti", {
-      method: "POST",
-      body: true,
-    });
+    try {
+      await $fetch("/api/conti/modifica", { method: "POST", body: datiConto.value });
+      cancellaDati();
+      toast.add({ severity: "success", summary: "Conferma", detail: "Modifica effettuata con successo", life: 3000 });
+      conti.value = await $fetch("/api/conti/prendiTutti", { method: "POST", body: true });
+    } catch (err) {
+      if (import.meta.dev) console.error("Errore modifica conto:", err);
+      toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile modificare il conto. Riprova.", life: 4000 });
+    }
   }
   bottonePremuto.value = false;
 };
@@ -312,20 +341,14 @@ const confermaElimina = () => {
       severity: "warn",
     },
     accept: async () => {
-      toast.add({
-        severity: "success",
-        summary: "Conferma",
-        detail: "Eliminazione effettuata con successo",
-        life: 3000,
-      });
-      await $fetch("/api/conti/elimina", {
-        method: "POST",
-        body: datiConto.value,
-      });
-      conti.value = await $fetch("/api/conti/prendiTutti", {
-        method: "POST",
-        body: true,
-      });
+      try {
+        await $fetch("/api/conti/elimina", { method: "POST", body: datiConto.value });
+        toast.add({ severity: "success", summary: "Conferma", detail: "Eliminazione effettuata con successo", life: 3000 });
+        conti.value = await $fetch("/api/conti/prendiTutti", { method: "POST", body: true });
+      } catch (err) {
+        if (import.meta.dev) console.error("Errore eliminazione conto:", err);
+        toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile eliminare il conto. Riprova.", life: 4000 });
+      }
     },
     reject: () => {
       toast.add({

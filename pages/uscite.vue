@@ -18,6 +18,35 @@
           <Divider />
         </template>
         <template #content>
+          <!-- Loading state -->
+          <div v-if="loading" class="flex lg:flex-row flex-column w-full gap-4" style="height: 100%">
+            <div class="flex flex-column w-full gap-3">
+              <div class="flex gap-2">
+                <Skeleton height="3rem" class="w-full" />
+                <Skeleton height="3rem" class="w-full" />
+              </div>
+              <Skeleton height="22rem" class="w-full" />
+            </div>
+            <div class="lg:w-35rem w-full">
+              <Skeleton height="1.5rem" class="mb-3 w-12rem mx-auto" />
+              <Skeleton height="1rem" class="mb-2" v-for="i in 5" :key="i" />
+            </div>
+          </div>
+
+          <!-- Error state -->
+          <div
+            v-else-if="errore"
+            class="flex flex-column align-items-center justify-content-center gap-3 p-6"
+            style="min-height: 20rem">
+            <i class="fa-solid fa-circle-exclamation text-5xl" style="color: var(--p-amber-500)"></i>
+            <p class="text-xl text-center m-0">{{ errore.messaggio }}</p>
+            <Button @click="caricaDati()" severity="secondary">
+              <i class="fa-solid fa-rotate-right mr-2"></i>
+              Riprova
+            </Button>
+          </div>
+
+          <template v-else>
           <div class="lg:chart-container flex flex-column w-full">
             <div
               class="w-full lg:m-0 mb-5 flex lg:flex-row flex-column justify-content-evenly"
@@ -148,6 +177,7 @@
               </DataTable>
             </template>
           </Card>
+          </template><!-- end v-else -->
         </template>
       </Card>
     </NuxtLayout>
@@ -485,11 +515,13 @@ const nomeUtente = ref(
     .value.substring(0, useCookie("email").value.indexOf("@"))
     .toUpperCase()
 );
+const loading = ref(false);
+const errore = ref(null);
 const opzioniMesiChart = ref();
 const datiMesiChart = ref();
-const categorieUscite = ref();
+const categorieUscite = ref([]);
 const serviziDaAssociare = ref([]);
-let categorieSelezionate = ref();
+let categorieSelezionate = ref([]);
 let visualizzaCrea = ref(false);
 let visualizzaModifica = ref(false);
 let visualizzaElimina = ref(false);
@@ -503,39 +535,48 @@ let erroreEsisteGia = ref(false);
 const toast = useToast();
 const { isMobile } = useDevice();
 
-onMounted(async () => {
+const caricaDati = async () => {
+  loading.value = true;
+  errore.value = null;
   try {
-    const datiMesi = await $fetch("/api/entrate-uscite/prendiResocontoMesi", {
-      method: "POST",
-      body: { entrate: false },
-    });
+    const [datiMesi, categorie, conti, budget] = await Promise.all([
+      $fetch("/api/entrate-uscite/prendiResocontoMesi", { method: "POST", body: { entrate: false } }),
+      $fetch("/api/categorie/prendiTutti", { method: "POST", body: { entrate: false, somma: true } }),
+      $fetch("/api/conti/prendiTutti"),
+      $fetch("/api/budget/prendiTutti"),
+    ]);
     datiMesiChart.value = datiMesi[0];
     opzioniMesiChart.value = {
       ...datiMesi[1],
       onHover: (event, elements) => {
         if (event.native) {
-          event.native.target.style.cursor = elements.length
-            ? "pointer"
-            : "default";
+          event.native.target.style.cursor = elements.length ? "pointer" : "default";
         }
       },
     };
-    categorieUscite.value = await $fetch("/api/categorie/prendiTutti", {
-      method: "POST",
-      body: { entrate: false, somma: true },
-    });
-    const conti = await $fetch("/api/conti/prendiTutti");
+    categorieUscite.value = categorie ?? [];
+    serviziDaAssociare.value = [];
     conti.map((x) => (x.servizio = "conto"));
-    const budget = await $fetch("/api/budget/prendiTutti");
     budget.map((x) => (x.servizio = "budget"));
     if (conti?.length > 0)
       serviziDaAssociare.value.push({ nome: "Conti", items: conti });
     if (budget?.length > 0)
       serviziDaAssociare.value.push({ nome: "Budget", items: budget });
-  } catch (error) {}
+  } catch (err) {
+    if (import.meta.dev) console.error("Errore caricamento uscite:", err);
+    if (err?.statusCode === 401 || err?.statusCode === 403)
+      errore.value = { tipo: "permessi", messaggio: "Non hai i permessi per accedere a questi dati." };
+    else
+      errore.value = { tipo: "server", messaggio: "Errore durante il caricamento. Riprova." };
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(async () => {
+  await caricaDati();
   if (isMobile)
-    document.querySelector("body").style.backgroundColor =
-      "var(--p-card-background)";
+    document.querySelector("body").style.backgroundColor = "var(--p-card-background)";
 });
 
 const creaCategoria = async () => {
@@ -548,24 +589,24 @@ const creaCategoria = async () => {
   else erroreEsisteGia.value = false;
   submit.value = true;
   if (nuovaCategoria.value.nome?.length > 0 && !erroreEsisteGia.value) {
-    await $fetch("/api/categorie/crea", {
-      method: "POST",
-      body: { ...nuovaCategoria.value, entrate: false },
-    });
     visualizzaCrea.value = false;
     bottonePremuto.value = false;
-    nuovaCategoria.value = {};
     submit.value = false;
-    toast.add({
-      severity: "success",
-      summary: "Conferma",
-      detail: "Creazione effettuata con successo",
-      life: 3000,
-    });
-    categorieUscite.value = await $fetch("/api/categorie/prendiTutti", {
-      method: "POST",
-      body: { entrate: false, somma: true },
-    });
+    try {
+      await $fetch("/api/categorie/crea", {
+        method: "POST",
+        body: { ...nuovaCategoria.value, entrate: false },
+      });
+      nuovaCategoria.value = {};
+      toast.add({ severity: "success", summary: "Conferma", detail: "Creazione effettuata con successo", life: 3000 });
+      categorieUscite.value = await $fetch("/api/categorie/prendiTutti", {
+        method: "POST",
+        body: { entrate: false, somma: true },
+      });
+    } catch (err) {
+      if (import.meta.dev) console.error("Errore creazione categoria:", err);
+      toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile creare la categoria. Riprova.", life: 4000 });
+    }
   }
   bottonePremuto.value = false;
 };
@@ -580,35 +621,31 @@ const creaUscita = async () => {
   ) {
     visualizzaCreaUscita.value = false;
     bottonePremuto.value = false;
-    await $fetch("/api/entrate-uscite/crea", {
-      method: "POST",
-      body: { ...nuovaUscita.value, entrate: false },
-    });
-    toast.add({
-      severity: "success",
-      summary: "Conferma",
-      detail: "Creazione effettuata con successo",
-      life: 3000,
-    });
-    const datiMesi = await $fetch("/api/entrate-uscite/prendiResocontoMesi", {
-      method: "POST",
-      body: { entrate: false },
-    });
-    datiMesiChart.value = datiMesi[0];
-    opzioniMesiChart.value = {
-      ...datiMesi[1],
-      onHover: (event, elements) => {
-        if (event.native) {
-          event.native.target.style.cursor = elements.length
-            ? "pointer"
-            : "default";
-        }
-      },
-    };
-    categorieUscite.value = await $fetch("/api/categorie/prendiTutti", {
-      method: "POST",
-      body: { entrate: false, somma: true },
-    });
+    try {
+      await $fetch("/api/entrate-uscite/crea", {
+        method: "POST",
+        body: { ...nuovaUscita.value, entrate: false },
+      });
+      nuovaUscita.value = {};
+      toast.add({ severity: "success", summary: "Conferma", detail: "Creazione effettuata con successo", life: 3000 });
+      const [datiMesi, categorie] = await Promise.all([
+        $fetch("/api/entrate-uscite/prendiResocontoMesi", { method: "POST", body: { entrate: false } }),
+        $fetch("/api/categorie/prendiTutti", { method: "POST", body: { entrate: false, somma: true } }),
+      ]);
+      datiMesiChart.value = datiMesi[0];
+      opzioniMesiChart.value = {
+        ...datiMesi[1],
+        onHover: (event, elements) => {
+          if (event.native) {
+            event.native.target.style.cursor = elements.length ? "pointer" : "default";
+          }
+        },
+      };
+      categorieUscite.value = categorie ?? [];
+    } catch (err) {
+      if (import.meta.dev) console.error("Errore creazione uscita:", err);
+      toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile creare l'uscita. Riprova.", life: 4000 });
+    }
   }
   bottonePremuto.value = false;
 };
@@ -625,45 +662,45 @@ const modificaCategoria = async () => {
   else erroreEsisteGia.value = false;
   visualizzaErrore.value = false;
   if (nuovaCategoria.value.nome?.length > 0 && !erroreEsisteGia.value) {
-    await $fetch("/api/categorie/modifica", {
-      method: "POST",
-      body: { ...nuovaCategoria.value, entrate: false },
-    });
     visualizzaCrea.value = false;
     bottonePremuto.value = false;
     visualizzaModifica.value = false;
-    nuovaCategoria.value = {};
-    toast.add({
-      severity: "success",
-      summary: "Conferma",
-      detail: "Modifica effettuata con successo",
-      life: 3000,
-    });
-    categorieUscite.value = await $fetch("/api/categorie/prendiTutti", {
-      method: "POST",
-      body: { entrate: false, somma: true },
-    });
+    try {
+      await $fetch("/api/categorie/modifica", {
+        method: "POST",
+        body: { ...nuovaCategoria.value, entrate: false },
+      });
+      nuovaCategoria.value = {};
+      toast.add({ severity: "success", summary: "Conferma", detail: "Modifica effettuata con successo", life: 3000 });
+      categorieUscite.value = await $fetch("/api/categorie/prendiTutti", {
+        method: "POST",
+        body: { entrate: false, somma: true },
+      });
+    } catch (err) {
+      if (import.meta.dev) console.error("Errore modifica categoria:", err);
+      toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile modificare la categoria. Riprova.", life: 4000 });
+    }
   }
   bottonePremuto.value = false;
 };
 const eliminaCategorie = async () => {
   visualizzaElimina.value = false;
   bottonePremuto.value = false;
-  await $fetch("/api/categorie/elimina", {
-    method: "POST",
-    body: { categorie: categorieSelezionate.value, entrate: false },
-  });
-  toast.add({
-    severity: "success",
-    summary: "Conferma",
-    detail: "Eliminazione effettuata con successo",
-    life: 3000,
-  });
-  pulisciCategorieSelezionate();
-  categorieUscite.value = await $fetch("/api/categorie/prendiTutti", {
-    method: "POST",
-    body: { entrate: false, somma: true },
-  });
+  try {
+    await $fetch("/api/categorie/elimina", {
+      method: "POST",
+      body: { categorie: categorieSelezionate.value, entrate: false },
+    });
+    toast.add({ severity: "success", summary: "Conferma", detail: "Eliminazione effettuata con successo", life: 3000 });
+    pulisciCategorieSelezionate();
+    categorieUscite.value = await $fetch("/api/categorie/prendiTutti", {
+      method: "POST",
+      body: { entrate: false, somma: true },
+    });
+  } catch (err) {
+    if (import.meta.dev) console.error("Errore eliminazione categorie:", err);
+    toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile eliminare le categorie. Riprova.", life: 4000 });
+  }
 };
 
 const controllaEliminaCategorie = () => {

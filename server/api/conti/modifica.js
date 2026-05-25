@@ -18,15 +18,15 @@ export default defineEventHandler(async (event) => {
   }
 
   if (nome?.length > 0 && soldi >= 0) {
-    await contiModel.update(
-      {
-        nome: nome,
-        soldi: soldi - soldiEntrate + soldiUscita,
-      },
-      {
-        where: {id: id},
-      }
-    );
-    return "OK";
-  } else return createError({ statusText: "Parametri mancanti", status: 400 });
+    try {
+      await contiModel.update(
+        { nome: nome, soldi: soldi - soldiEntrate + soldiUscita },
+        { where: { id: id } }
+      );
+      return "OK";
+    } catch (error) {
+      console.error("Errore DB conti/modifica:", error);
+      throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+    }
+  } else return createError({ statusCode: 400, statusMessage: "Parametri mancanti" });
 });

@@ -17,34 +17,29 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const categorie = (
-    await categorieModel.findAll({
-      attributes: ["id", "servizioCollegato"],
-      where: {
-        utente: utente,
-        entrate: false,
-      },
-    })
-  ).filter(
-    (c) =>
-      c.dataValues.servizioCollegato?.split(":")[0] === "budget" &&
-      c.dataValues.servizioCollegato?.split(":")[1] === nome
-  );
+  try {
+    const categorie = (
+      await categorieModel.findAll({
+        attributes: ["id", "servizioCollegato"],
+        where: { utente: utente, entrate: false },
+      })
+    ).filter(
+      (c) =>
+        c.dataValues.servizioCollegato?.split(":")[0] === "budget" &&
+        c.dataValues.servizioCollegato?.split(":")[1] === nome
+    );
 
-  await categorieModel.update(
-    {
-      servizioCollegato: null,
-    },
-    {
-      where: {
-        [Op.or]: categorie.map((c) => ({ id: c.dataValues.id })),
-      },
+    if (categorie.length > 0) {
+      await categorieModel.update(
+        { servizioCollegato: null },
+        { where: { [Op.or]: categorie.map((c) => ({ id: c.dataValues.id })) } }
+      );
     }
-  );
 
-  await budgetModel.destroy({
-    where: { id: id },
-    force: true,
-  });
-  return "OK";
+    await budgetModel.destroy({ where: { id: id }, force: true });
+    return "OK";
+  } catch (error) {
+    console.error("Errore DB budget/elimina:", error);
+    throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+  }
 });

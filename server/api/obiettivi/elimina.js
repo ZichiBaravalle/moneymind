@@ -17,34 +17,28 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const categorie = (
-    await categorieModel.findAll({
-      attributes: ["id", "servizioCollegato"],
-      where: {
-        utente: utente,
-        entrate: true
-      },
-    })
-  ).filter(
-    (c) =>
-      c.dataValues.servizioCollegato?.split(":")[0] === "obiettivo" &&
-      c.dataValues.servizioCollegato?.split(":")[1] === nome
-  );
+  try {
+    const categorie = (
+      await categorieModel.findAll({
+        attributes: ["id", "servizioCollegato"],
+        where: { utente: utente, entrate: true },
+      })
+    ).filter(
+      (c) =>
+        c.dataValues.servizioCollegato?.split(":")[0] === "obiettivo" &&
+        c.dataValues.servizioCollegato?.split(":")[1] === nome
+    );
 
-  await categorieModel.update(
-    {
-      servizioCollegato: null,
-    },
-    {
-      where: {
-        [Op.or]: categorie.map((c) => ({ id: c.dataValues.id })),
-      },
+    if (categorie.length > 0) {
+      await categorieModel.update(
+        { servizioCollegato: null },
+        { where: { [Op.or]: categorie.map((c) => ({ id: c.dataValues.id })) } }
+      );
     }
-  );
-
-  await obiettiviModel.destroy({
-    where: { id: id },
-    force: true,
-  });
-  return "OK";
+    await obiettiviModel.destroy({ where: { id: id }, force: true });
+    return "OK";
+  } catch (error) {
+    console.error("Errore DB obiettivi/elimina:", error);
+    throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+  }
 });

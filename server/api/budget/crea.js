@@ -35,17 +35,21 @@ export default defineEventHandler(async (event) => {
     periodoRipetizione &&
     periodoNome?.length > 0
   ) {
-    const prossimaRipetizione = calcolaPeriodo(periodoNome, periodoRipetizione, dataIniziale);
-    await budgetModel.create({
-      nome: nome,
-      soldiMassimi: soldiMassimi,
-      soldiUsati: soldiUsati,
-      prossimaRipetizione: prossimaRipetizione,
-      durataRipetizione: periodoNome + ";" + periodoRipetizione,
-
-      contoCollegato: nomeContoCollegato,
-      utente: utente,
-    });
-    return "OK";
-  } else return createError({ statusText: "Parametri mancanti", status: 400 });
+    try {
+      const prossimaRipetizione = calcolaPeriodo(periodoNome, periodoRipetizione, dataIniziale);
+      await budgetModel.create({
+        nome: nome,
+        soldiMassimi: soldiMassimi,
+        soldiUsati: soldiUsati,
+        prossimaRipetizione: prossimaRipetizione,
+        durataRipetizione: periodoNome + ";" + periodoRipetizione,
+        contoCollegato: nomeContoCollegato,
+        utente: utente,
+      });
+      return "OK";
+    } catch (error) {
+      console.error("Errore DB budget/crea:", error);
+      throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+    }
+  } else return createError({ statusCode: 400, statusMessage: "Parametri mancanti" });
 });

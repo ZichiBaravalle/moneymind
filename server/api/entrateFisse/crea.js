@@ -21,15 +21,20 @@ export default defineEventHandler(async (event) => {
   }
   
   if (nome?.length > 0 && soldi > 0 && periodoRipetizione && periodoNome?.length > 0) {
-    const prossimaRipetizione = calcolaPeriodo(periodoNome, periodoRipetizione, dataIniziale);
-    await entrateFisseModel.create({
-      nome: nome,
-      soldi: soldi,
-      prossimaRipetizione: prossimaRipetizione,
-      durataRipetizione: periodoNome + ";" + periodoRipetizione,
-      contoCollegato: nomeContoCollegato,
-      utente: utente
-    })
-    return "OK"
-  } else return createError({ statusText: "Parametri mancanti", status: 400 });
+    try {
+      const prossimaRipetizione = calcolaPeriodo(periodoNome, periodoRipetizione, dataIniziale);
+      await entrateFisseModel.create({
+        nome: nome,
+        soldi: soldi,
+        prossimaRipetizione: prossimaRipetizione,
+        durataRipetizione: periodoNome + ";" + periodoRipetizione,
+        contoCollegato: nomeContoCollegato,
+        utente: utente,
+      });
+      return "OK";
+    } catch (error) {
+      console.error("Errore DB entrateFisse/crea:", error);
+      throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+    }
+  } else return createError({ statusCode: 400, statusMessage: "Parametri mancanti" });
 });

@@ -16,12 +16,12 @@ export default defineEventHandler(async (event) => {
   }
 
   if (nome?.length > 0 && soldi >= 0) {
-    await contiModel.create({
-      nome: nome,
-      soldi: soldi,
-      
-      utente: utente
-    })
-    return "OK"
-  } else return createError({ statusText: "Parametri mancanti", status: 400 });
+    try {
+      await contiModel.create({ nome: nome, soldi: soldi, utente: utente });
+      return "OK";
+    } catch (error) {
+      console.error("Errore DB conti/crea:", error);
+      throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+    }
+  } else return createError({ statusCode: 400, statusMessage: "Parametri mancanti" });
 });

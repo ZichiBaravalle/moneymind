@@ -24,7 +24,31 @@
           <Divider />
         </template>
         <template #content>
+          <!-- Loading state -->
+          <div v-if="loading" class="flex flex-wrap gap-4">
+            <div v-for="i in 3" :key="i" class="w-full lg:w-18rem">
+              <Skeleton height="2rem" class="mb-3 w-8rem mx-auto" />
+              <Skeleton height="1rem" class="mb-2" />
+              <Skeleton height="1rem" class="mb-2" />
+              <Skeleton height="3rem" class="mt-3" />
+            </div>
+          </div>
+
+          <!-- Error state -->
+          <div
+            v-else-if="errore"
+            class="flex flex-column align-items-center justify-content-center gap-3 p-6"
+            style="min-height: 20rem">
+            <i class="fa-solid fa-circle-exclamation text-5xl" style="color: var(--p-amber-500)"></i>
+            <p class="text-xl text-center m-0">{{ errore.messaggio }}</p>
+            <Button @click="caricaDati()" severity="secondary">
+              <i class="fa-solid fa-rotate-right mr-2"></i>
+              Riprova
+            </Button>
+          </div>
+
           <DataView
+            v-else
             :value="entrateFisse"
             layout="grid"
             :pt="
@@ -33,7 +57,14 @@
                 : { content: 'w-full grid-custom' }
             ">
             <template #empty>
-              <h3 class="text-center">Non ci sono elementi disponibili</h3>
+              <div class="flex flex-column align-items-center p-6 gap-3">
+                <i class="fa-solid fa-calendar-check text-4xl" style="color: var(--p-text-muted-color)"></i>
+                <p class="text-xl m-0" style="color: var(--p-text-muted-color)">Nessuna entrata fissa</p>
+                <p class="text-sm m-0" style="color: var(--p-text-muted-color)">Aggiungi una entrata ricorrente per tenerla tracciata</p>
+                <Button @click="visualizzaCrea = true; visualizzaModifica = false; erroreEsisteGia = false;">
+                  <i class="fa-solid fa-plus mr-2"></i>Aggiungi entrata fissa
+                </Button>
+              </div>
             </template>
             <template #grid="slotProps">
               <Card
@@ -50,7 +81,7 @@
                   <span class="text-4xl">{{ item.nome }}</span>
                 </template>
                 <template #content>
-                  <div class="mb-3">Soldi: {{ item.soldi }}€</div>
+                  <div class="mb-3">Soldi: {{ formatEuro(item.soldi) }}</div>
                   <div>
                     Prossimo rinnovo:
                     {{ moment(item.prossimaRipetizione).format("DD/MM/YYYY") }}
@@ -349,8 +380,10 @@ import moment from "moment";
 useHead({
   title: "Money Mind | Entrate fisse",
 });
-let entrateFisse = ref();
-let conti = ref();
+const loading = ref(false);
+const errore = ref(null);
+let entrateFisse = ref([]);
+let conti = ref([]);
 let submit = ref(false);
 let erroreModifica = ref(false);
 let erroreEsisteGia = ref(false);
@@ -384,14 +417,31 @@ const periodo = ref([
 ]);
 const { isMobile } = useDevice();
 
-onMounted(async () => {
+const caricaDati = async () => {
+  loading.value = true;
+  errore.value = null;
   try {
-    entrateFisse.value = await $fetch("/api/entrateFisse/prendiTutti");
-    conti.value = await $fetch("/api/conti/prendiTutti");
-  } catch (error) {}
+    const [entrateFisseData, contiData] = await Promise.all([
+      $fetch("/api/entrateFisse/prendiTutti"),
+      $fetch("/api/conti/prendiTutti"),
+    ]);
+    entrateFisse.value = entrateFisseData ?? [];
+    conti.value = contiData ?? [];
+  } catch (err) {
+    if (import.meta.dev) console.error("Errore caricamento entrate fisse:", err);
+    if (err?.statusCode === 401 || err?.statusCode === 403)
+      errore.value = { tipo: "permessi", messaggio: "Non hai i permessi per accedere a questi dati." };
+    else
+      errore.value = { tipo: "server", messaggio: "Errore durante il caricamento. Riprova." };
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(async () => {
+  await caricaDati();
   if (isMobile)
-    document.querySelector("body").style.backgroundColor =
-      "var(--p-card-background)";
+    document.querySelector("body").style.backgroundColor = "var(--p-card-background)";
 });
 
 const apriInfoModRipetizione = (event) => {
@@ -418,18 +468,15 @@ const creaEntrataFissa = async () => {
   ) {
     visualizzaCrea.value = false;
     bottonePremuto.value = false;
-    await $fetch("/api/entrateFisse/crea", {
-      method: "POST",
-      body: datiEntrataFissa.value,
-    });
-    cancellaDati();
-    toast.add({
-      severity: "success",
-      summary: "Conferma",
-      detail: "Creazione effettuata con successo",
-      life: 3000,
-    });
-    entrateFisse.value = await $fetch("/api/entrateFisse/prendiTutti");
+    try {
+      await $fetch("/api/entrateFisse/crea", { method: "POST", body: datiEntrataFissa.value });
+      cancellaDati();
+      toast.add({ severity: "success", summary: "Conferma", detail: "Creazione effettuata con successo", life: 3000 });
+      entrateFisse.value = await $fetch("/api/entrateFisse/prendiTutti");
+    } catch (err) {
+      if (import.meta.dev) console.error("Errore creazione entrata fissa:", err);
+      toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile creare l'entrata fissa. Riprova.", life: 4000 });
+    }
   }
   bottonePremuto.value = false;
 };
@@ -466,17 +513,14 @@ const modificaEntrataFissa = async () => {
     visualizzaCrea.value = false;
     bottonePremuto.value = false;
     visualizzaModifica.value = false;
-    await $fetch("/api/entrateFisse/modifica", {
-      method: "POST",
-      body: datiEntrataFissa.value,
-    });
-    toast.add({
-      severity: "success",
-      summary: "Conferma",
-      detail: "Modifica effettuata con successo",
-      life: 3000,
-    });
-    entrateFisse.value = await $fetch("/api/entrateFisse/prendiTutti");
+    try {
+      await $fetch("/api/entrateFisse/modifica", { method: "POST", body: datiEntrataFissa.value });
+      toast.add({ severity: "success", summary: "Conferma", detail: "Modifica effettuata con successo", life: 3000 });
+      entrateFisse.value = await $fetch("/api/entrateFisse/prendiTutti");
+    } catch (err) {
+      if (import.meta.dev) console.error("Errore modifica entrata fissa:", err);
+      toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile modificare l'entrata fissa. Riprova.", life: 4000 });
+    }
   }
   bottonePremuto.value = false;
 };
@@ -495,17 +539,14 @@ const confermaElimina = () => {
       severity: "warn",
     },
     accept: async () => {
-      toast.add({
-        severity: "success",
-        summary: "Conferma",
-        detail: "Eliminazione effettuata con successo",
-        life: 3000,
-      });
-      await $fetch("/api/entrateFisse/elimina", {
-        method: "POST",
-        body: datiEntrataFissa.value,
-      });
-      entrateFisse.value = await $fetch("/api/entrateFisse/prendiTutti");
+      try {
+        await $fetch("/api/entrateFisse/elimina", { method: "POST", body: datiEntrataFissa.value });
+        toast.add({ severity: "success", summary: "Conferma", detail: "Eliminazione effettuata con successo", life: 3000 });
+        entrateFisse.value = await $fetch("/api/entrateFisse/prendiTutti");
+      } catch (err) {
+        if (import.meta.dev) console.error("Errore eliminazione entrata fissa:", err);
+        toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile eliminare l'entrata fissa. Riprova.", life: 4000 });
+      }
     },
     reject: () => {
       toast.add({

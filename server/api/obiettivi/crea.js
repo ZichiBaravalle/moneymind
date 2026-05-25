@@ -18,14 +18,18 @@ export default defineEventHandler(async (event) => {
   }
 
   if (nome?.length > 0 && obiettivoSoldi >= 0 && soldiAttuali >= 0) {
-    await obiettiviModel.create({
-      nome: nome,
-      obiettivoSoldi: obiettivoSoldi,
-      soldiAttuali: soldiAttuali,
-      
-      utente: utente,
-      contoCollegato: nomeContoCollegato
-    })
-    return "OK"
-  } else return createError({ statusText: "Parametri mancanti", status: 400 });
+    try {
+      await obiettiviModel.create({
+        nome: nome,
+        obiettivoSoldi: obiettivoSoldi,
+        soldiAttuali: soldiAttuali,
+        utente: utente,
+        contoCollegato: nomeContoCollegato,
+      });
+      return "OK";
+    } catch (error) {
+      console.error("Errore DB obiettivi/crea:", error);
+      throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+    }
+  } else return createError({ statusCode: 400, statusMessage: "Parametri mancanti" });
 });

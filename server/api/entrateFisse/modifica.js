@@ -23,32 +23,29 @@ export default defineEventHandler(async (event) => {
   }
 
   if (nome?.length > 0 && soldi > 0 && id >= 0) {
-    if (ripetizioneModificata) {
-      const prossimaRipetizione = calcolaPeriodo(periodoNome, periodoRipetizione);
-      await entrateFisseModel.update(
-        {
-          nome: nome,
-          soldi: soldi,
-          prossimaRipetizione: prossimaRipetizione,
-          durataRipetizione: periodoNome + ";" + periodoRipetizione,
-          contoCollegato: nomeContoCollegato
-        },
-        {
-          where: { id: id },
-        }
-      );
+    try {
+      if (ripetizioneModificata) {
+        const prossimaRipetizione = calcolaPeriodo(periodoNome, periodoRipetizione);
+        await entrateFisseModel.update(
+          {
+            nome: nome,
+            soldi: soldi,
+            prossimaRipetizione: prossimaRipetizione,
+            durataRipetizione: periodoNome + ";" + periodoRipetizione,
+            contoCollegato: nomeContoCollegato,
+          },
+          { where: { id: id } }
+        );
+      } else {
+        await entrateFisseModel.update(
+          { nome: nome, soldi: soldi, contoCollegato: nomeContoCollegato },
+          { where: { id: id } }
+        );
+      }
+      return "OK";
+    } catch (error) {
+      console.error("Errore DB entrateFisse/modifica:", error);
+      throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
     }
-    else 
-      await entrateFisseModel.update(
-        {
-          nome: nome,
-          soldi: soldi,
-          contoCollegato: nomeContoCollegato
-        },
-        {
-          where: { id: id },
-        }
-      );
-    return "OK";
-  } else return createError({ statusText: "Parametri mancanti", status: 400 });
+  } else return createError({ statusCode: 400, statusMessage: "Parametri mancanti" });
 });

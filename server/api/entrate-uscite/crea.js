@@ -43,27 +43,16 @@ export default defineEventHandler(async (event) => {
     categoria?.length > 0 &&
     utente?.length > 0
   ) {
-    if (entrate) {
-      await entrateModel.create({
-        nome: nome,
-        soldi: soldi,
-        mese: mese,
-        data: data,
-        categoria: categoria,
-        utente: utente,
-        
-      });
-    } else {
-      await usciteModel.create({
-        nome: nome,
-        soldi: soldi,
-        mese: mese,
-        data: data,
-        categoria: categoria,
-        utente: utente,
-        
-      });
+    try {
+      if (entrate) {
+        await entrateModel.create({ nome, soldi, mese, data, categoria, utente });
+      } else {
+        await usciteModel.create({ nome, soldi, mese, data, categoria, utente });
+      }
+      return "OK";
+    } catch (error) {
+      console.error("Errore DB entrate-uscite/crea:", error);
+      throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
     }
-    return "OK";
-  } else return createError({ statusText: "Parametri mancanti", status: 400 });
+  } else return createError({ statusCode: 400, statusMessage: "Parametri mancanti" });
 });

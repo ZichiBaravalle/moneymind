@@ -20,67 +20,72 @@ export default defineEventHandler(async (event) => {
     conSoldiObiettivo = false;
   }
 
-  if (conSoldiObiettivo) {
-    const obiettivi = await prendiObiettivi(event);
+  try {
+    if (conSoldiObiettivo) {
+      const [obiettivi, budgets, categorie] = await Promise.all([
+        prendiObiettivi(event),
+        prendiBudgets(event),
+        prendiCategorie("conto", utente),
+      ]);
 
-    const budgets = await prendiBudgets(event);
+      const [entrate, uscite] = await Promise.all([
+        prendiEntrate(categorie, utente, "conto"),
+        prendiUscite(categorie, utente, "conto"),
+      ]);
 
-    const categorie = await prendiCategorie("conto", utente);
+      conti = await contiModel.findAll({
+        attributes: ["id", "nome", "soldi", "updatedAt"],
+        where: { utente: utente },
+      });
 
-    const entrate = await prendiEntrate(categorie, utente, "conto");
+      for (const conto of conti) {
+        conto.dataValues.soldiUscita = 0;
+        uscite
+          .filter((x) => x.conto === conto.dataValues.nome)
+          .forEach((uscita) => {
+            conto.dataValues.soldi -= uscita.soldi;
+            conto.dataValues.soldiUscita += uscita.soldi;
+          });
 
-    const uscite = await prendiUscite(categorie, utente, "conto");
+        budgets
+          .filter((x) => x.dataValues.contoCollegato === conto.dataValues.nome)
+          .forEach((bu) => {
+            conto.dataValues.soldi -= bu.dataValues.soldiUsati;
+          });
 
-    conti = await contiModel.findAll({
-      attributes: ["id", "nome", "soldi", "updatedAt"],
-      where: {
-        utente: utente,
-      },
-    });
+        conto.dataValues.soldiEntrate = 0;
 
-    for (const conto of conti) {
-      conto.dataValues.soldiUscita = 0;
-      uscite
-        .filter((x) => x.conto === conto.dataValues.nome)
-        .forEach((uscita) => {
-          conto.dataValues.soldi -= uscita.soldi;
-          conto.dataValues.soldiUscita += uscita.soldi;
-        });
+        entrate
+          .filter((x) => x.conto === conto.dataValues.nome)
+          .forEach((entrata) => {
+            conto.dataValues.soldi += entrata.soldi;
+            conto.dataValues.soldiEntrate += entrata.soldi;
+          });
 
-      budgets
-        .filter((x) => x.dataValues.contoCollegato === conto.dataValues.nome)
-        .forEach((bu) => {
-          conto.dataValues.soldi -= bu.dataValues.soldiUsati;
-        });
+        let soldiDaTogliere = 0;
 
-      conto.dataValues.soldiEntrate = 0;
+        obiettivi
+          .filter((x) => x.dataValues.contoCollegato === conto.dataValues.nome)
+          .forEach((ob) => {
+            if (ob.dataValues.soldiAttuali >= ob.dataValues.obiettivoSoldi)
+              soldiDaTogliere += ob.dataValues.obiettivoSoldi;
+            else soldiDaTogliere += ob.dataValues.soldiAttuali;
+            conto.dataValues.soldi += ob.dataValues.soldiAttuali;
+            conto.dataValues.soldiEntrate += ob.dataValues.soldiAttuali;
+          });
 
-      entrate
-        .filter((x) => x.conto === conto.dataValues.nome)
-        .forEach((entrata) => {
-          conto.dataValues.soldi += entrata.soldi;
-          conto.dataValues.soldiEntrate += entrata.soldi;
-        });
-
-      let soldiDaTogliere = 0;
-
-      obiettivi
-        .filter((x) => x.dataValues.contoCollegato === conto.dataValues.nome)
-        .forEach((ob) => {
-          if (ob.dataValues.soldiAttuali >= ob.dataValues.obiettivoSoldi)
-            soldiDaTogliere += ob.dataValues.obiettivoSoldi;
-          else soldiDaTogliere += ob.dataValues.soldiAttuali;
-          conto.dataValues.soldi += ob.dataValues.soldiAttuali;
-          conto.dataValues.soldiEntrate += ob.dataValues.soldiAttuali;
-        });
-
-      conto.dataValues.soldiSenzaObiettivi =
-        conto.dataValues.soldi - soldiDaTogliere;
+        conto.dataValues.soldiSenzaObiettivi =
+          conto.dataValues.soldi - soldiDaTogliere;
+      }
+    } else {
+      conti = await contiModel.findAll({
+        attributes: ["id", "nome", "soldi", "updatedAt"],
+        where: { utente: utente },
+      });
     }
-  } else
-    conti = await contiModel.findAll({
-      attributes: ["id", "nome", "soldi", "updatedAt"],
-      where: { utente: utente },
-    });
-  return conti;
+    return conti;
+  } catch (error) {
+    console.error("Errore DB conti/prendiTutti:", error);
+    throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+  }
 });

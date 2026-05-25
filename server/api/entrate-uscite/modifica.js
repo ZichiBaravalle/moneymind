@@ -20,41 +20,17 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  if (
-    nome?.length > 0 &&
-    soldi > 0 &&
-    moment(data).isValid() &&
-    categoria?.length > 0 &&
-    id
-  ) {
-    if (entrate)
-      await entrateModel.update(
-        {
-          nome: nome,
-          soldi: soldi,
-          data: data,
-          categoria: categoria,
-        },
-        {
-          where: {
-            id: id,
-          },
-        }
-      );
-    else
-      await usciteModel.update(
-        {
-          nome: nome,
-          soldi: soldi,
-          data: data,
-          categoria: categoria,
-        },
-        {
-          where: {
-            id: id,
-          },
-        }
-      );
-    return "OK";
-  } else return createError({ statusText: "Parametri mancanti", status: 400 });
+  if (nome?.length > 0 && soldi > 0 && moment(data).isValid() && categoria?.length > 0 && id) {
+    try {
+      const updateData = { nome, soldi, data, categoria };
+      if (entrate)
+        await entrateModel.update(updateData, { where: { id: id } });
+      else
+        await usciteModel.update(updateData, { where: { id: id } });
+      return "OK";
+    } catch (error) {
+      console.error("Errore DB entrate-uscite/modifica:", error);
+      throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+    }
+  } else return createError({ statusCode: 400, statusMessage: "Parametri mancanti" });
 });

@@ -12,11 +12,11 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const entrateFisse = await entrateFisseModel.findAll({
-    where: {
-      utente: utente,
-    },
-  });
-
-  return entrateFisse;
+  try {
+    const entrateFisse = await entrateFisseModel.findAll({ where: { utente: utente } });
+    return entrateFisse;
+  } catch (error) {
+    console.error("Errore DB entrateFisse/prendiTutti:", error);
+    throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+  }
 });

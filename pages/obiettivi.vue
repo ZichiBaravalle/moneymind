@@ -24,7 +24,32 @@
           <Divider />
         </template>
         <template #content>
+          <!-- Loading state -->
+          <div v-if="loading" class="flex flex-wrap gap-4">
+            <div v-for="i in 3" :key="i" class="w-full lg:w-18rem">
+              <Skeleton height="2rem" class="mb-3 w-8rem mx-auto" />
+              <Skeleton height="1rem" class="mb-2" />
+              <Skeleton height="1rem" class="mb-2" />
+              <Skeleton height="1rem" class="mb-2" />
+              <Skeleton height="3rem" class="mt-3" />
+            </div>
+          </div>
+
+          <!-- Error state -->
+          <div
+            v-else-if="errore"
+            class="flex flex-column align-items-center justify-content-center gap-3 p-6"
+            style="min-height: 20rem">
+            <i class="fa-solid fa-circle-exclamation text-5xl" style="color: var(--p-amber-500)"></i>
+            <p class="text-xl text-center m-0">{{ errore.messaggio }}</p>
+            <Button @click="caricaDati()" severity="secondary">
+              <i class="fa-solid fa-rotate-right mr-2"></i>
+              Riprova
+            </Button>
+          </div>
+
           <DataView
+            v-else
             :value="obiettivi"
             layout="grid"
             :pt="
@@ -33,7 +58,14 @@
                 : { content: 'w-full grid-custom' }
             ">
             <template #empty>
-              <h3 class="text-center">Non ci sono elementi disponibili</h3>
+              <div class="flex flex-column align-items-center p-6 gap-3">
+                <i class="fa-solid fa-bullseye text-4xl" style="color: var(--p-text-muted-color)"></i>
+                <p class="text-xl m-0" style="color: var(--p-text-muted-color)">Nessun obiettivo creato</p>
+                <p class="text-sm m-0" style="color: var(--p-text-muted-color)">Crea il tuo primo obiettivo di risparmio</p>
+                <Button @click="visualizzaCrea = true; visualizzaModifica = false; erroreEsisteGia = false;">
+                  <i class="fa-solid fa-plus mr-2"></i>Aggiungi obiettivo
+                </Button>
+              </div>
             </template>
             <template #grid="slotProps">
               <Card
@@ -57,10 +89,10 @@
                 </template>
                 <template #content>
                   <div>
-                    Obiettivo da raggiungere: {{ item.obiettivoSoldi }}€
+                    Obiettivo da raggiungere: {{ formatEuro(item.obiettivoSoldi) }}
                   </div>
                   <div class="mt-3">
-                    Soldi attuali: {{ item.soldiAttuali }}€
+                    Soldi attuali: {{ formatEuro(item.soldiAttuali) }}
                   </div>
                   <div class="mt-3" v-if="item.contoCollegato">
                     Conto collegato: {{ item.contoCollegato }}
@@ -239,7 +271,7 @@
             v-if="opzioneInput.value === 'slider'"
             style="white-space: nowrap"
             class="ml-3 text-xl mb-1">
-            {{ datiObiettivi.soldiAttuali || 0 }} €
+            {{ formatEuro(datiObiettivi.soldiAttuali || 0) }}
           </span>
         </span>
         <small v-if="datiObiettivi.soldiAttuali < 0 && submit">
@@ -322,7 +354,9 @@
 useHead({
   title: "Money Mind | Obiettivi",
 });
-let obiettivi = ref();
+const loading = ref(false);
+const errore = ref(null);
+let obiettivi = ref([]);
 let opzioneInput = ref({
   value: "slider",
   icon: "fa-solid fa-slider",
@@ -332,7 +366,7 @@ let erroreModifica = ref(false);
 let erroreEsisteGia = ref(false);
 let visualizzaCrea = ref(false);
 let visualizzaModifica = ref(false);
-let conti = ref();
+let conti = ref([]);
 let datiObiettivi = ref({
   id: 0,
   nome: "",
@@ -352,14 +386,31 @@ const nomeUtente = ref(
 );
 const { isMobile } = useDevice();
 
-onMounted(async () => {
+const caricaDati = async () => {
+  loading.value = true;
+  errore.value = null;
   try {
-    obiettivi.value = await $fetch("/api/obiettivi/prendiTutti");
-    conti.value = await $fetch("/api/conti/prendiTutti");
-  } catch (error) {}
+    const [obiettiviData, contiData] = await Promise.all([
+      $fetch("/api/obiettivi/prendiTutti"),
+      $fetch("/api/conti/prendiTutti"),
+    ]);
+    obiettivi.value = obiettiviData ?? [];
+    conti.value = contiData ?? [];
+  } catch (err) {
+    if (import.meta.dev) console.error("Errore caricamento obiettivi:", err);
+    if (err?.statusCode === 401 || err?.statusCode === 403)
+      errore.value = { tipo: "permessi", messaggio: "Non hai i permessi per accedere a questi dati." };
+    else
+      errore.value = { tipo: "server", messaggio: "Errore durante il caricamento. Riprova." };
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(async () => {
+  await caricaDati();
   if (isMobile)
-    document.querySelector("body").style.backgroundColor =
-      "var(--p-card-background)";
+    document.querySelector("body").style.backgroundColor = "var(--p-card-background)";
 });
 
 const creaObiettivo = async () => {
@@ -375,18 +426,15 @@ const creaObiettivo = async () => {
   ) {
     visualizzaCrea.value = false;
     bottonePremuto.value = false;
-    await $fetch("/api/obiettivi/crea", {
-      method: "POST",
-      body: datiObiettivi.value,
-    });
-    cancellaDati();
-    toast.add({
-      severity: "success",
-      summary: "Conferma",
-      detail: "Creazione effettuata con successo",
-      life: 3000,
-    });
-    obiettivi.value = await $fetch("/api/obiettivi/prendiTutti");
+    try {
+      await $fetch("/api/obiettivi/crea", { method: "POST", body: datiObiettivi.value });
+      cancellaDati();
+      toast.add({ severity: "success", summary: "Conferma", detail: "Creazione effettuata con successo", life: 3000 });
+      obiettivi.value = await $fetch("/api/obiettivi/prendiTutti");
+    } catch (err) {
+      if (import.meta.dev) console.error("Errore creazione obiettivo:", err);
+      toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile creare l'obiettivo. Riprova.", life: 4000 });
+    }
   }
   bottonePremuto.value = false;
 };
@@ -410,18 +458,15 @@ const modificaObiettivo = async () => {
     visualizzaCrea.value = false;
     bottonePremuto.value = false;
     visualizzaModifica.value = false;
-    await $fetch("/api/obiettivi/modifica", {
-      method: "POST",
-      body: datiObiettivi.value,
-    });
-    cancellaDati();
-    toast.add({
-      severity: "success",
-      summary: "Conferma",
-      detail: "Modifica effettuata con successo",
-      life: 3000,
-    });
-    obiettivi.value = await $fetch("/api/obiettivi/prendiTutti");
+    try {
+      await $fetch("/api/obiettivi/modifica", { method: "POST", body: datiObiettivi.value });
+      cancellaDati();
+      toast.add({ severity: "success", summary: "Conferma", detail: "Modifica effettuata con successo", life: 3000 });
+      obiettivi.value = await $fetch("/api/obiettivi/prendiTutti");
+    } catch (err) {
+      if (import.meta.dev) console.error("Errore modifica obiettivo:", err);
+      toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile modificare l'obiettivo. Riprova.", life: 4000 });
+    }
   }
   bottonePremuto.value = false;
 };
@@ -440,17 +485,14 @@ const confermaElimina = () => {
       severity: "warn",
     },
     accept: async () => {
-      toast.add({
-        severity: "success",
-        summary: "Conferma",
-        detail: "Eliminazione effettuata con successo",
-        life: 3000,
-      });
-      await $fetch("/api/obiettivi/elimina", {
-        method: "POST",
-        body: datiObiettivi.value,
-      });
-      obiettivi.value = await $fetch("/api/obiettivi/prendiTutti");
+      try {
+        await $fetch("/api/obiettivi/elimina", { method: "POST", body: datiObiettivi.value });
+        toast.add({ severity: "success", summary: "Conferma", detail: "Eliminazione effettuata con successo", life: 3000 });
+        obiettivi.value = await $fetch("/api/obiettivi/prendiTutti");
+      } catch (err) {
+        if (import.meta.dev) console.error("Errore eliminazione obiettivo:", err);
+        toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile eliminare l'obiettivo. Riprova.", life: 4000 });
+      }
     },
     reject: () => {
       toast.add({

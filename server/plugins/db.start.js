@@ -11,7 +11,6 @@ import { entrateFisseModel } from "../models/entrateFisse.model";
 
 export default defineNitroPlugin(async (nitro) => {
   try {
-    await sequelize.authenticate();
     await sequelize.sync();
     // #region reset/creation model
     // await sequelize.sync({force: true, alter: true});

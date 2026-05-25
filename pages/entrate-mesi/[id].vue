@@ -5,7 +5,30 @@
         :class="isMobile ? 'h-full w-full' : 'cardPrincipale'"
         :pt="{ content: 'h-full', body: 'h-full' }">
         <template #content>
+          <!-- Loading state -->
+          <div v-if="loading" class="flex flex-column gap-3 p-4">
+            <div class="flex justify-content-between align-items-center mb-3">
+              <Skeleton height="2.5rem" class="w-16rem" />
+              <Skeleton height="2.5rem" class="w-12rem" />
+            </div>
+            <Skeleton height="1rem" v-for="i in 5" :key="i" class="mb-2" />
+          </div>
+
+          <!-- Error state -->
+          <div
+            v-else-if="errore"
+            class="flex flex-column align-items-center justify-content-center gap-3 p-6"
+            style="min-height: 20rem">
+            <i class="fa-solid fa-circle-exclamation text-5xl" style="color: var(--p-amber-500)"></i>
+            <p class="text-xl text-center m-0">{{ errore.messaggio }}</p>
+            <Button @click="caricaDati()" severity="secondary">
+              <i class="fa-solid fa-rotate-right mr-2"></i>
+              Riprova
+            </Button>
+          </div>
+
           <DataTable
+            v-else
             selectionMode="single"
             @rowSelect="
               visualizzaModifica = true;
@@ -238,9 +261,11 @@ useHead({
 definePageMeta({
   middleware: "controllo-id",
 });
-let entrate = ref();
+const loading = ref(false);
+const errore = ref(null);
+let entrate = ref([]);
 let nomeEntrataModifica = ref("");
-let categorie = ref();
+let categorie = ref([]);
 let submit = ref(false);
 let erroreModifica = ref(false);
 let visualizzaCrea = ref(false);
@@ -275,23 +300,31 @@ const toast = useToast();
 const confirm = useConfirm();
 const { isMobile } = useDevice();
 
-onMounted(async () => {
+const caricaDati = async () => {
+  loading.value = true;
+  errore.value = null;
   try {
-    entrate.value = await $fetch("/api/entrate-uscite/prendiTutti", {
-      method: "POST",
-      body: {
-        mese: route.params.id,
-        entrate: true,
-      },
-    });
-    categorie.value = await $fetch("/api/categorie/prendiTutti", {
-      method: "POST",
-      body: { entrate: true },
-    });
-  } catch (error) {}
+    const [entrateData, categorieData] = await Promise.all([
+      $fetch("/api/entrate-uscite/prendiTutti", { method: "POST", body: { mese: route.params.id, entrate: true } }),
+      $fetch("/api/categorie/prendiTutti", { method: "POST", body: { entrate: true } }),
+    ]);
+    entrate.value = entrateData ?? [];
+    categorie.value = categorieData ?? [];
+  } catch (err) {
+    if (import.meta.dev) console.error("Errore caricamento entrate mese:", err);
+    if (err?.statusCode === 401 || err?.statusCode === 403)
+      errore.value = { tipo: "permessi", messaggio: "Non hai i permessi per accedere a questi dati." };
+    else
+      errore.value = { tipo: "server", messaggio: "Errore durante il caricamento. Riprova." };
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(async () => {
+  await caricaDati();
   if (isMobile)
-    document.querySelector("body").style.backgroundColor =
-      "var(--p-card-background)";
+    document.querySelector("body").style.backgroundColor = "var(--p-card-background)";
 });
 
 const creaEntrata = async () => {
@@ -308,24 +341,18 @@ const creaEntrata = async () => {
   ) {
     visualizzaCrea.value = false;
     bottonePremuto.value = false;
-    await $fetch("/api/entrate-uscite/crea", {
-      method: "POST",
-      body: { ...datiEntrate.value },
-    });
-    cancellaDati();
-    toast.add({
-      severity: "success",
-      summary: "Conferma",
-      detail: "Creazione effettuata con successo",
-      life: 3000,
-    });
-    entrate.value = await $fetch("/api/entrate-uscite/prendiTutti", {
-      method: "POST",
-      body: {
-        mese: route.params.id,
-        entrate: true,
-      },
-    });
+    try {
+      await $fetch("/api/entrate-uscite/crea", { method: "POST", body: { ...datiEntrate.value } });
+      cancellaDati();
+      toast.add({ severity: "success", summary: "Conferma", detail: "Creazione effettuata con successo", life: 3000 });
+      entrate.value = await $fetch("/api/entrate-uscite/prendiTutti", {
+        method: "POST",
+        body: { mese: route.params.id, entrate: true },
+      });
+    } catch (err) {
+      if (import.meta.dev) console.error("Errore creazione entrata:", err);
+      toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile creare l'entrata. Riprova.", life: 4000 });
+    }
   }
   bottonePremuto.value = false;
 };
@@ -345,24 +372,18 @@ const modificaEntrata = async () => {
     visualizzaCrea.value = false;
     bottonePremuto.value = false;
     visualizzaModifica.value = false;
-    await $fetch("/api/entrate-uscite/modifica", {
-      method: "POST",
-      body: datiEntrate.value,
-    });
-    cancellaDati();
-    toast.add({
-      severity: "success",
-      summary: "Conferma",
-      detail: "Modifica effettuata con successo",
-      life: 3000,
-    });
-    entrate.value = await $fetch("/api/entrate-uscite/prendiTutti", {
-      method: "POST",
-      body: {
-        mese: route.params.id,
-        entrate: true,
-      },
-    });
+    try {
+      await $fetch("/api/entrate-uscite/modifica", { method: "POST", body: datiEntrate.value });
+      cancellaDati();
+      toast.add({ severity: "success", summary: "Conferma", detail: "Modifica effettuata con successo", life: 3000 });
+      entrate.value = await $fetch("/api/entrate-uscite/prendiTutti", {
+        method: "POST",
+        body: { mese: route.params.id, entrate: true },
+      });
+    } catch (err) {
+      if (import.meta.dev) console.error("Errore modifica entrata:", err);
+      toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile modificare l'entrata. Riprova.", life: 4000 });
+    }
   }
   bottonePremuto.value = false;
 };
@@ -381,26 +402,17 @@ const eliminaEntrata = (entrata) => {
       severity: "warn",
     },
     accept: async () => {
-      await $fetch("/api/entrate-uscite/elimina", {
-        method: "POST",
-        body: {
-          id: entrata.id,
-          entrate: true,
-        },
-      });
-      toast.add({
-        severity: "success",
-        summary: "Conferma",
-        detail: "Eliminazione effettuata con successo",
-        life: 3000,
-      });
-      entrate.value = await $fetch("/api/entrate-uscite/prendiTutti", {
-        method: "POST",
-        body: {
-          mese: route.params.id,
-          entrate: true,
-        },
-      });
+      try {
+        await $fetch("/api/entrate-uscite/elimina", { method: "POST", body: { id: entrata.id, entrate: true } });
+        toast.add({ severity: "success", summary: "Conferma", detail: "Eliminazione effettuata con successo", life: 3000 });
+        entrate.value = await $fetch("/api/entrate-uscite/prendiTutti", {
+          method: "POST",
+          body: { mese: route.params.id, entrate: true },
+        });
+      } catch (err) {
+        if (import.meta.dev) console.error("Errore eliminazione entrata:", err);
+        toast.add({ severity: "error", summary: "Errore server", detail: "Impossibile eliminare l'entrata. Riprova.", life: 4000 });
+      }
     },
     reject: () => {
       toast.add({

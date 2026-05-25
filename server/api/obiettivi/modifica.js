@@ -19,17 +19,15 @@ export default defineEventHandler(async (event) => {
   }
 
   if (nome?.length > 0 && obiettivoSoldi >= 0 && soldiAttuali >= 0) {
-    await obiettiviModel.update(
-      {
-        nome: nome,
-        soldiAttuali: soldiAttuali - soldiEntrate,
-        obiettivoSoldi: obiettivoSoldi,
-        contoCollegato: contoCollegato,
-      },
-      {
-        where: {id: id},
-      }
-    );
-    return "OK";
-  } else return createError({ statusText: "Parametri mancanti", status: 400 });
+    try {
+      await obiettiviModel.update(
+        { nome: nome, soldiAttuali: soldiAttuali - soldiEntrate, obiettivoSoldi: obiettivoSoldi, contoCollegato: contoCollegato },
+        { where: { id: id } }
+      );
+      return "OK";
+    } catch (error) {
+      console.error("Errore DB obiettivi/modifica:", error);
+      throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+    }
+  } else return createError({ statusCode: 400, statusMessage: "Parametri mancanti" });
 });

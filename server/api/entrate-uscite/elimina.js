@@ -15,15 +15,14 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  if (entrate)
-    await entrateModel.destroy({
-      where: { id: id },
-      force: true,
-    });
-  else
-    await usciteModel.destroy({
-      where: { id: id },
-      force: true,
-    });
-  return "OK";
+  try {
+    if (entrate)
+      await entrateModel.destroy({ where: { id: id }, force: true });
+    else
+      await usciteModel.destroy({ where: { id: id }, force: true });
+    return "OK";
+  } catch (error) {
+    console.error("Errore DB entrate-uscite/elimina:", error);
+    throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+  }
 });

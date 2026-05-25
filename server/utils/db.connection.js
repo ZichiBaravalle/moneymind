@@ -4,7 +4,7 @@ const config = useRuntimeConfig()
 
 export const sequelize = new Sequelize(
   {
-    dialect: 'mariadb',
+    dialect: 'mysql',
     host: config.HOST_DATABASE,
     port: config.PORT_DATABASE,
     username: config.USERNAME_DATABASE,

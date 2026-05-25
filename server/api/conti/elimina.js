@@ -20,69 +20,38 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const categorie = (
-    await categorieModel.findAll({
-      attributes: ["id", "servizioCollegato"],
-      where: {
-        utente: utente,
-      },
-    })
-  ).filter(
-    (c) =>
-      c.dataValues.servizioCollegato?.split(":")[0] === "conto" &&
-      c.dataValues.servizioCollegato?.split(":")[1] === nome
-  );
+  try {
+    const categorie = (
+      await categorieModel.findAll({
+        attributes: ["id", "servizioCollegato"],
+        where: { utente: utente },
+      })
+    ).filter(
+      (c) =>
+        c.dataValues.servizioCollegato?.split(":")[0] === "conto" &&
+        c.dataValues.servizioCollegato?.split(":")[1] === nome
+    );
 
-  await categorieModel.update(
-    {
-      servizioCollegato: null,
-    },
-    {
-      where: {
-        [Op.or]: categorie.map((c) => ({ id: c.dataValues.id })),
-      },
+    const updatePromises = [];
+    if (categorie.length > 0) {
+      updatePromises.push(
+        categorieModel.update(
+          { servizioCollegato: null },
+          { where: { [Op.or]: categorie.map((c) => ({ id: c.dataValues.id })) } }
+        )
+      );
     }
-  );
+    updatePromises.push(
+      obiettiviModel.update({ contoCollegato: null }, { where: { contoCollegato: nome, utente: utente } }),
+      budgetModel.update({ contoCollegato: null }, { where: { contoCollegato: nome, utente: utente } }),
+      entrateFisseModel.update({ contoCollegato: null }, { where: { contoCollegato: nome, utente: utente } })
+    );
+    await Promise.all(updatePromises);
 
-  await obiettiviModel.update(
-    {
-      contoCollegato: null,
-    },
-    {
-      where: {
-        contoCollegato: nome,
-        utente: utente,
-      },
-    }
-  );
-
-  await budgetModel.update(
-    {
-      contoCollegato: null,
-    },
-    {
-      where: {
-        contoCollegato: nome,
-        utente: utente,
-      },
-    }
-  );
-
-  await entrateFisseModel.update(
-    {
-      contoCollegato: null,
-    },
-    {
-      where: {
-        contoCollegato: nome,
-        utente: utente,
-      },
-    }
-  );
-
-  await contiModel.destroy({
-    where: { id: id },
-    force: true,
-  });
-  return "OK";
+    await contiModel.destroy({ where: { id: id }, force: true });
+    return "OK";
+  } catch (error) {
+    console.error("Errore DB conti/elimina:", error);
+    throw createError({ statusCode: 500, statusMessage: "Errore interno del server" });
+  }
 });
