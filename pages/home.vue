@@ -406,6 +406,11 @@ const onHover = (event, elements) => {
   }
 };
 
+const formatDateOnly = (value) => {
+  const parsed = moment(value);
+  return parsed.isValid() ? parsed.format("YYYY-MM-DD") : null;
+};
+
 const classificaErrore = (err) => {
   if (import.meta.dev) console.error("Errore home:", err);
   if (err?.statusCode === 401 || err?.statusCode === 403)
@@ -510,7 +515,11 @@ const creaEntrata = async () => {
     try {
       await $fetch("/api/entrate-uscite/crea", {
         method: "POST",
-        body: { ...nuovoDato.value, entrate: true },
+        body: {
+          ...nuovoDato.value,
+          data: formatDateOnly(nuovoDato.value.data),
+          entrate: true,
+        },
       });
       visualizzaCrea.value = false;
       nuovoDato.value = {};
@@ -539,7 +548,11 @@ const creaUscita = async () => {
     try {
       await $fetch("/api/entrate-uscite/crea", {
         method: "POST",
-        body: { ...nuovoDato.value, entrate: false },
+        body: {
+          ...nuovoDato.value,
+          data: formatDateOnly(nuovoDato.value.data),
+          entrate: false,
+        },
       });
       visualizzaCrea.value = false;
       nuovoDato.value = {};

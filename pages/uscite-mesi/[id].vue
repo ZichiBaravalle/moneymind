@@ -293,6 +293,11 @@ const toast = useToast();
 const confirm = useConfirm();
 const { isMobile } = useDevice();
 
+const formatDateOnly = (value) => {
+  const parsed = moment(value);
+  return parsed.isValid() ? parsed.format("YYYY-MM-DD") : null;
+};
+
 const caricaDati = async () => {
   loading.value = true;
   errore.value = null;
@@ -335,7 +340,14 @@ const creaUscita = async () => {
     visualizzaCrea.value = false;
     bottonePremuto.value = false;
     try {
-      await $fetch("/api/entrate-uscite/crea", { method: "POST", body: { ...datiUscite.value, entrate: false } });
+      await $fetch("/api/entrate-uscite/crea", {
+        method: "POST",
+        body: {
+          ...datiUscite.value,
+          data: formatDateOnly(datiUscite.value.data),
+          entrate: false,
+        },
+      });
       cancellaDati();
       toast.add({ severity: "success", summary: "Conferma", detail: "Creazione effettuata con successo", life: 3000 });
       uscite.value = await $fetch("/api/entrate-uscite/prendiTutti", {
@@ -366,7 +378,14 @@ const modificaUscita = async () => {
     bottonePremuto.value = false;
     visualizzaModifica.value = false;
     try {
-      await $fetch("/api/entrate-uscite/modifica", { method: "POST", body: { ...datiUscite.value, entrate: false } });
+      await $fetch("/api/entrate-uscite/modifica", {
+        method: "POST",
+        body: {
+          ...datiUscite.value,
+          data: formatDateOnly(datiUscite.value.data),
+          entrate: false,
+        },
+      });
       cancellaDati();
       toast.add({ severity: "success", summary: "Conferma", detail: "Modifica effettuata con successo", life: 3000 });
       uscite.value = await $fetch("/api/entrate-uscite/prendiTutti", {

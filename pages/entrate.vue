@@ -540,6 +540,11 @@ let erroreEsisteGia = ref(false);
 const toast = useToast();
 const { isMobile } = useDevice();
 
+const formatDateOnly = (value) => {
+  const parsed = moment(value);
+  return parsed.isValid() ? parsed.format("YYYY-MM-DD") : null;
+};
+
 const caricaDati = async () => {
   loading.value = true;
   errore.value = null;
@@ -630,7 +635,11 @@ const creaEntrata = async () => {
     try {
       await $fetch("/api/entrate-uscite/crea", {
         method: "POST",
-        body: { ...nuovaEntrata.value, entrate: true },
+        body: {
+          ...nuovaEntrata.value,
+          data: formatDateOnly(nuovaEntrata.value.data),
+          entrate: true,
+        },
       });
       nuovaEntrata.value = {};
       toast.add({ severity: "success", summary: "Conferma", detail: "Creazione effettuata con successo", life: 3000 });

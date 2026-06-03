@@ -2,12 +2,29 @@ import moment from "moment";
 import { usciteModel } from "~/server/models/uscite.model";
 import { entrateModel } from "~/server/models/entrate.model";
 
+const getLastSundayUtc = (year, monthIndex) => {
+  const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0));
+  const dayOfWeek = lastDay.getUTCDay();
+  lastDay.setUTCDate(lastDay.getUTCDate() - dayOfWeek);
+  return lastDay;
+};
+
+const getRomeOffsetMinutes = (utcDate) => {
+  const year = utcDate.getUTCFullYear();
+  const dstStart = new Date(Date.UTC(year, 2, getLastSundayUtc(year, 2).getUTCDate(), 1, 0, 0));
+  const dstEnd = new Date(Date.UTC(year, 9, getLastSundayUtc(year, 9).getUTCDate(), 1, 0, 0));
+  const isDst = utcDate >= dstStart && utcDate < dstEnd;
+  return isDst ? 120 : 60;
+};
+
+// Normalize to a date-only string using Europe/Rome rules, even when Intl TZ data is missing.
 const normalizeDateOnly = (input) => {
   if (!input) return null;
   if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
   const parsed = new Date(input);
   if (Number.isNaN(parsed.getTime())) return null;
-  const shifted = new Date(parsed.getTime() + 24 * 60 * 60 * 1000);
+  const offsetMinutes = getRomeOffsetMinutes(parsed);
+  const shifted = new Date(parsed.getTime() + offsetMinutes * 60 * 1000);
   return shifted.toISOString().slice(0, 10);
 };
 
@@ -33,7 +50,7 @@ export default defineEventHandler(async (event) => {
     nome = body.nome;
     soldi = body.soldi;
     data = normalizeDateOnly(body.data);
-    mese = data ? mesi[moment(data, "YYYY-MM-DD").month()] : null;
+    mese = data ? mesi[moment(data, "YYYY-MM-DD", true).month()] : null;
     entrate = body.entrate;
     categoria = body.categoria;
     utente = getCookie(event, "email");
