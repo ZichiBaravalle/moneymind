@@ -10,6 +10,10 @@ export const sequelize = new Sequelize(
     username: config.USERNAME_DATABASE,
     password: config.PASSWORD_DATABASE,
     database: config.DATABASE,
+    timezone: '+02:00',
+    dialectOptions: {
+      timezone: '+02:00',
+    },
     define: {
       timestamps: false,
     },
