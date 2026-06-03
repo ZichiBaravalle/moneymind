@@ -2,6 +2,19 @@ import moment from "moment";
 import { usciteModel } from "~/server/models/uscite.model";
 import { entrateModel } from "~/server/models/entrate.model";
 
+const normalizeDateOnly = (input) => {
+  if (!input) return null;
+  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
+  const parsed = new Date(input);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Rome",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(parsed);
+};
+
 export default defineEventHandler(async (event) => {
   let nome, soldi, data, mese, entrate, categoria, utente;
   const mesi = [
@@ -23,8 +36,8 @@ export default defineEventHandler(async (event) => {
     const body = await readBody(event);
     nome = body.nome;
     soldi = body.soldi;
-    data = body.data;
-    mese = mesi[moment(data).month()]
+    data = normalizeDateOnly(body.data);
+    mese = data ? mesi[moment(data, "YYYY-MM-DD").month()] : null;
     entrate = body.entrate;
     categoria = body.categoria;
     utente = getCookie(event, "email");
@@ -38,7 +51,7 @@ export default defineEventHandler(async (event) => {
   if (
     nome?.length > 0 &&
     soldi > 0 &&
-    moment(data).isValid() &&
+    moment(data, "YYYY-MM-DD", true).isValid() &&
     mese?.length > 0 &&
     categoria?.length > 0 &&
     utente?.length > 0

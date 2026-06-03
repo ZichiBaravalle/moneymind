@@ -2,6 +2,19 @@ import moment from "moment";
 import { usciteModel } from "~/server/models/uscite.model";
 import { entrateModel } from "~/server/models/entrate.model";
 
+const normalizeDateOnly = (input) => {
+  if (!input) return null;
+  if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
+  const parsed = new Date(input);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Rome",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(parsed);
+};
+
 export default defineEventHandler(async (event) => {
   let nome, soldi, data, entrate, categoria, id;
 
@@ -9,7 +22,7 @@ export default defineEventHandler(async (event) => {
     const body = await readBody(event);
     nome = body.nome;
     soldi = body.soldi;
-    data = body.data;
+    data = normalizeDateOnly(body.data);
     entrate = body.entrate;
     categoria = body.categoria;
     id = body.id
@@ -20,7 +33,13 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  if (nome?.length > 0 && soldi > 0 && moment(data).isValid() && categoria?.length > 0 && id) {
+  if (
+    nome?.length > 0 &&
+    soldi > 0 &&
+    moment(data, "YYYY-MM-DD", true).isValid() &&
+    categoria?.length > 0 &&
+    id
+  ) {
     try {
       const updateData = { nome, soldi, data, categoria };
       if (entrate)
