@@ -7,12 +7,8 @@ const normalizeDateOnly = (input) => {
   if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
   const parsed = new Date(input);
   if (Number.isNaN(parsed.getTime())) return null;
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Rome",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(parsed);
+  const shifted = new Date(parsed.getTime() + 3 * 60 * 60 * 1000);
+  return shifted.toISOString().slice(0, 10);
 };
 
 export default defineEventHandler(async (event) => {
