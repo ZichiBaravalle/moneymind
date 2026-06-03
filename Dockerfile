@@ -15,6 +15,11 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV TZ=Europe/Rome
+
+RUN apk add --no-cache tzdata \
+	&& ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+	&& echo $TZ >/etc/timezone
 
 # Copy only the built output and production deps
 COPY --from=builder /app/.output /app/.output
